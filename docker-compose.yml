@@ -1,0 +1,155 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: nivano_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-nivano_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-nivano_password}
+      POSTGRES_DB: ${DB_NAME:-nivano_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nivano_network
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: auth_service
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-nivano_user}:${DB_PASSWORD:-nivano_password}@postgres:5432/${DB_NAME:-nivano_db}
+      DB_USER: ${DB_USER:-nivano_user}
+      DB_PASSWORD: ${DB_PASSWORD:-nivano_password}
+      DB_NAME: ${DB_NAME:-nivano_db}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-this}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+    ports:
+      - "${AUTH_SERVICE_PORT:-8001}:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nivano_network
+
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    container_name: user_service
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-nivano_user}:${DB_PASSWORD:-nivano_password}@postgres:5432/${DB_NAME:-nivano_db}
+      DB_USER: ${DB_USER:-nivano_user}
+      DB_PASSWORD: ${DB_PASSWORD:-nivano_password}
+      DB_NAME: ${DB_NAME:-nivano_db}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-this}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+    ports:
+      - "${USER_SERVICE_PORT:-8002}:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nivano_network
+
+  shift-service:
+    build:
+      context: .
+      dockerfile: services/shift-service/Dockerfile
+    container_name: shift_service
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-nivano_user}:${DB_PASSWORD:-nivano_password}@postgres:5432/${DB_NAME:-nivano_db}
+      DB_USER: ${DB_USER:-nivano_user}
+      DB_PASSWORD: ${DB_PASSWORD:-nivano_password}
+      DB_NAME: ${DB_NAME:-nivano_db}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-this}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+    ports:
+      - "${SHIFT_SERVICE_PORT:-8003}:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nivano_network
+
+  compliance-service:
+    build:
+      context: .
+      dockerfile: services/compliance-service/Dockerfile
+    container_name: compliance_service
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-nivano_user}:${DB_PASSWORD:-nivano_password}@postgres:5432/${DB_NAME:-nivano_db}
+      DB_USER: ${DB_USER:-nivano_user}
+      DB_PASSWORD: ${DB_PASSWORD:-nivano_password}
+      DB_NAME: ${DB_NAME:-nivano_db}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-this}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      COMPLIANCE_PUBLIC_URL: ${COMPLIANCE_PUBLIC_URL:-http://localhost:8004}
+    ports:
+      - "${COMPLIANCE_SERVICE_PORT:-8004}:8004"
+    volumes:
+      - compliance_documents:/app/storage/documents
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nivano_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_AUTH_API_URL: ${VITE_AUTH_API_URL:-http://localhost:8001}
+        VITE_USER_API_URL: ${VITE_USER_API_URL:-http://localhost:8002}
+        VITE_SHIFT_API_URL: ${VITE_SHIFT_API_URL:-http://localhost:8003}
+        VITE_COMPLIANCE_API_URL: ${VITE_COMPLIANCE_API_URL:-http://localhost:8004}
+    container_name: nivano_frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    networks:
+      - nivano_network
+
+  migration-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.migration-runner
+    container_name: migration_runner
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-nivano_user}:${DB_PASSWORD:-nivano_password}@postgres:5432/${DB_NAME:-nivano_db}
+      DB_USER: ${DB_USER:-nivano_user}
+      DB_PASSWORD: ${DB_PASSWORD:-nivano_password}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-nivano_db}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nivano_network
+
+volumes:
+  postgres_data:
+  compliance_documents:
+
+networks:
+  nivano_network:
+    driver: bridge
